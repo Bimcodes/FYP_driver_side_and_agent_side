@@ -1,0 +1,71 @@
+name: driver_agent_fyp
+description: "QR Fare Transit — Operations Application for Agents and Drivers."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── UI ─────────────────────────────────────────────────────────────────────
+  cupertino_icons: ^1.0.8
+
+  # ── State Management ───────────────────────────────────────────────────────
+  # Riverpod is our ViewModel layer. It manages app state in a safe,
+  # testable, and dependency-injection-friendly way.
+  flutter_riverpod: ^2.6.1
+
+  # ── Navigation ─────────────────────────────────────────────────────────────
+  # go_router gives us named, type-safe routes (like /role-select, /login, etc.)
+  go_router: ^14.8.1
+
+  # ── Backend (Supabase) ─────────────────────────────────────────────────────
+  # The official Supabase SDK for Flutter.
+  # Handles: Auth (login/logout), database queries, and real-time streams.
+  supabase_flutter: ^2.9.0
+
+  # ── Hardware: GPS ──────────────────────────────────────────────────────────
+  # Used by Driver Mode to get accurate device location coordinates.
+  geolocator: ^13.0.2
+
+  # ── Hardware: Camera / QR Scanner ──────────────────────────────────────────
+  # Used by Agent Mode to scan a student's wallet QR code.
+  mobile_scanner: ^5.2.3
+
+  # ── Audio ──────────────────────────────────────────────────────────────────
+  # Used by Driver Mode to play the boarding success chime.
+  # No audio file is needed now — we will add the asset later.
+  audioplayers: ^6.4.0
+
+  # ── Permissions ────────────────────────────────────────────────────────────
+  # Requests runtime permissions for Camera (Agent QR scan) and
+  # Location (Driver GPS). Required on Android and iOS.
+  permission_handler: ^11.4.0
+
+  # ── Utilities ──────────────────────────────────────────────────────────────
+  # Generates RFC 4122 UUIDs. Useful for local transaction references.
+  uuid: ^4.5.1
+
+  # ── Logging ────────────────────────────────────────────────────────────────
+  # Provides pretty-printed, colour-coded terminal logs with levels:
+  # logger.d() = Debug, logger.i() = Info, logger.w() = Warning, logger.e() = Error
+  logger: ^2.4.0
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Lint rules recommended by the Flutter team.
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  # assets:
+  #   Placeholder — audio assets will be added here when the chime file is available.
+  #   - assets/audio/boarding_success.mp3
