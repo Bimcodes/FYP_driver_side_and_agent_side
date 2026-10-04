@@ -31,8 +31,10 @@ import '../../core/constants/app_routes.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/transaction_model.dart';
+import '../../repositories/fleet_repository.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/driver_dashboard_viewmodel.dart';
+import '../../viewmodels/bus_selection_viewmodel.dart';
 import '../shared/stat_card.dart';
 
 /// The Driver's Live Passenger Manifest screen.
@@ -99,9 +101,17 @@ class _DriverDashboardViewState extends ConsumerState<DriverDashboardView> {
           // Logout
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
+            onPressed: () async {
+              final selectedBus = ref.read(selectedBusProvider);
+              if (selectedBus != null) {
+                try {
+                  await ref.read(fleetRepositoryProvider).releaseBus(selectedBus.id);
+                } catch (_) {}
+              }
               ref.read(authViewModelProvider.notifier).signOut();
-              context.go(AppRoutes.roleSelect);
+              if (context.mounted) {
+                context.go(AppRoutes.roleSelect);
+              }
             },
           ),
         ],

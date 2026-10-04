@@ -74,6 +74,55 @@ class FakeAuthRepository implements AuthRepository {
   Future<UserModel?> getCurrentUser() async {
     return existingUser;
   }
+
+  @override
+  Future<void> signUpStudent({
+    required String email,
+    required String password,
+    required String firstName,
+  }) async {}
+
+  @override
+  Future<String> verifyOtp({
+    required String email,
+    required String otp,
+  }) async {
+    return 'fake-user-id';
+  }
+
+  @override
+  Future<UserModel> updateUserProfile({
+    required String userId,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? department,
+    String? username,
+  }) async {
+    return _fakeAgent;
+  }
+
+  @override
+  Future<UserModel> createStudentProfile({
+    required String userId,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? department,
+    String? username,
+  }) async {
+    return _fakeAgent;
+  }
+
+  @override
+  Future<void> setTransactionPin(String pin) async {
+    // Fake implementation
+  }
+
+  @override
+  Future<bool> hasTransactionPin() async {
+    return true; // Fake implementation
+  }
 }
 
 // =============================================================================

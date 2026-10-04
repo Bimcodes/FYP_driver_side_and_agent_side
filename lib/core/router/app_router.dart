@@ -37,10 +37,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../views/agent/agent_dashboard_view.dart';
+import '../../views/agent/agent_main_view.dart';
 import '../../views/agent/agent_history_view.dart';
 import '../../views/agent/retail_transfer_view.dart';
 import '../../views/agent/topup_scanner_view.dart';
+import '../../views/driver/bus_selection_view.dart';
 import '../../views/driver/driver_dashboard_view.dart';
 import '../../views/driver/driver_ledger_view.dart';
 import '../../views/forgot_password_view.dart';
@@ -48,6 +49,13 @@ import '../../views/login_with_email_view.dart';
 import '../../views/qr_register_view.dart';
 import '../../views/role_selection_view.dart';
 import '../../views/splash_view.dart';
+import '../../views/passenger/student_signup_view.dart';
+import '../../views/passenger/student_otp_view.dart';
+import '../../views/passenger/student_onboarding_view.dart';
+import '../../views/passenger/passenger_main_view.dart';
+import '../../views/passenger/passenger_scanner_view.dart';
+import '../../views/passenger/passenger_map_view.dart';
+import '../../views/passenger/passenger_history_view.dart';
 import '../constants/app_routes.dart';
 import 'router_notifier.dart';
 
@@ -114,7 +122,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ── Agent Routes ───────────────────────────────────────────────────────
       GoRoute(
         path: AppRoutes.agentDashboard,
-        builder: (context, state) => const AgentDashboardView(),
+        builder: (context, state) => const AgentMainView(),
       ),
       GoRoute(
         path: AppRoutes.topupScan,
@@ -131,12 +139,46 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // ── Driver Routes ──────────────────────────────────────────────────────
       GoRoute(
+        path: AppRoutes.driverBusSelect,
+        builder: (context, state) => const BusSelectionView(),
+      ),
+      GoRoute(
         path: AppRoutes.driverDashboard,
         builder: (context, state) => const DriverDashboardView(),
       ),
       GoRoute(
         path: AppRoutes.driverLedger,
         builder: (context, state) => const DriverLedgerView(),
+      ),
+
+      // ── Passenger (Student) Routes ─────────────────────────────────────────
+      GoRoute(
+        path: AppRoutes.passengerSignup,
+        builder: (context, state) => const StudentSignupView(),
+      ),
+      GoRoute(
+        path: AppRoutes.passengerOtp,
+        builder: (context, state) => const StudentOtpView(),
+      ),
+      GoRoute(
+        path: AppRoutes.passengerOnboarding,
+        builder: (context, state) => const StudentOnboardingView(),
+      ),
+      GoRoute(
+        path: AppRoutes.passengerDashboard,
+        builder: (context, state) => const PassengerMainView(),
+      ),
+      GoRoute(
+        path: AppRoutes.passengerBoard,
+        builder: (context, state) => const PassengerScannerView(),
+      ),
+      GoRoute(
+        path: AppRoutes.passengerMap,
+        builder: (context, state) => const PassengerMapView(),
+      ),
+      GoRoute(
+        path: AppRoutes.passengerHistory,
+        builder: (context, state) => const PassengerHistoryView(),
       ),
     ],
 

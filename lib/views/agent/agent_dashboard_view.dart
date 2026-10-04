@@ -1,72 +1,35 @@
-// =============================================================================
-// FILE: views/agent/agent_dashboard_view.dart
-// LAYER: View (UI Layer)
-//
-// PURPOSE:
-//   The Agent's main home screen — the "Digital Vault".
-//   Displays the agent's token balance and recent transactions.
-//   Provides navigation to the Transfer and History screens.
-//
-// MVVM ROLE:
-//   View. Reads AgentDashboardState from AgentDashboardViewModel.
-//   Contains ZERO business logic.
-//
-// WHAT THIS VIEW DOES:
-//   1. On first build, calls ViewModel.loadDashboard(agent).
-//   2. Shows a loading spinner while wallet data loads.
-//   3. Once loaded, displays the balance in a large StatCard.
-//   4. Shows last 3 transactions as a preview list.
-//   5. Provides a "Transfer to Student" button → navigates to RetailTransferView.
-// =============================================================================
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_routes.dart';
-import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/transaction_model.dart';
 import '../../viewmodels/agent_dashboard_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-import '../shared/primary_button.dart';
-import '../shared/stat_card.dart';
+import 'agent_main_view.dart';
 
-/// The Agent's Digital Vault home screen.
-///
-/// [MVVM ROLE]: Pure View. Reads state, calls actions, renders UI.
 class AgentDashboardView extends ConsumerStatefulWidget {
   const AgentDashboardView({super.key});
 
   @override
-  ConsumerState<AgentDashboardView> createState() =>
-      _AgentDashboardViewState();
+  ConsumerState<AgentDashboardView> createState() => _AgentDashboardViewState();
 }
 
 class _AgentDashboardViewState extends ConsumerState<AgentDashboardView> {
   bool _initialized = false;
+  bool _isBalanceVisible = true;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Load data once when the view is first shown.
-    // We use didChangeDependencies instead of initState because we need
-    // access to `ref` which isn't available in initState.
     if (!_initialized) {
       _initialized = true;
       final agent = ref.read(authViewModelProvider).user;
       if (agent != null) {
-        // WHY Future.microtask?
-        // Riverpod does not allow modifying a provider's state DURING the
-        // widget build phase (which includes didChangeDependencies on first mount).
-        // Future.microtask() schedules this call to run on the NEXT event loop
-        // tick — after the current build pass is complete. This is the standard
-        // Riverpod pattern for triggering ViewModel actions from lifecycle methods.
         Future.microtask(() {
           if (mounted) {
-            ref
-                .read(agentDashboardViewModelProvider.notifier)
-                .loadDashboard(agent);
+            ref.read(agentDashboardViewModelProvider.notifier).loadDashboard(agent);
           }
         });
       }
@@ -75,125 +38,230 @@ class _AgentDashboardViewState extends ConsumerState<AgentDashboardView> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the ViewModel state — rebuilds whenever state changes.
     final dashState = ref.watch(agentDashboardViewModelProvider);
     final authState = ref.watch(authViewModelProvider);
+    final user = authState.user;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppStrings.agentDashboardTitle),
-        actions: [
-          // History button
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'Transaction History',
-            onPressed: () => context.push(AppRoutes.agentHistory),
-          ),
-          // Logout button
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: AppStrings.logout,
-            onPressed: () {
-              ref.read(authViewModelProvider.notifier).signOut();
-              context.go(AppRoutes.roleSelect);
-            },
-          ),
-        ],
-      ),
-      body: dashState.isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.agentPrimary),
-            )
+      backgroundColor: AppColors.agentLightBackground,
+      body: SafeArea(
+        child: dashState.isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.agentBlue))
           : dashState.loadError != null
               ? _ErrorState(error: dashState.loadError!)
               : RefreshIndicator(
-                  color: AppColors.agentPrimary,
+                  color: AppColors.agentBlue,
                   onRefresh: () async {
-                    final agent = ref.read(authViewModelProvider).user;
-                    if (agent != null) {
-                      await ref
-                          .read(agentDashboardViewModelProvider.notifier)
-                          .loadDashboard(agent);
+                    if (user != null) {
+                      await ref.read(agentDashboardViewModelProvider.notifier).loadDashboard(user);
                     }
                   },
                   child: ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
-                      // ── Welcome Header ─────────────────────────────────────
-                      Text(
-                        'Welcome back,',
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        authState.user?.name ?? 'Agent',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      // ── Welcome Header with Avatar ─────────────────────────
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Welcome back,',
+                                style: TextStyle(color: AppColors.agentTextLight, fontSize: 13, fontWeight: FontWeight.w500),
+                              ),
+                              Text(
+                                user?.name ?? 'Agent',
+                                style: const TextStyle(color: AppColors.agentTextDark, fontSize: 20, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                          CircleAvatar(
+                            radius: 22,
+                            backgroundColor: AppColors.agentBlue,
+                            child: Text(
+                              user?.name.isNotEmpty == true 
+                                  ? user!.name.split(' ').map((e) => e[0]).take(2).join().toUpperCase() 
+                                  : 'A',
+                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 24),
 
-                      // ── Balance Card ───────────────────────────────────────
-                      StatCard(
-                        label: AppStrings.agentBalanceLabel,
-                        value: dashState.wallet != null
-                            ? '₦${dashState.wallet!.balance.toStringAsFixed(2)}'
-                            : '₦0.00',
-                        icon: Icons.account_balance_wallet,
-                        accentColor: AppColors.agentPrimary,
-                        subtitle: dashState.wallet?.walletType.displayName ?? 'Agent Vault',
+                      // ── Token Wallet Card ──────────────────────────────────
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.agentCardWhite,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.agentBlueBorder, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(color: AppColors.agentBlue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'MY TOKEN WALLET',
+                                  style: TextStyle(color: AppColors.agentTextLight, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                                ),
+                                GestureDetector(
+                                  onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: AppColors.agentBlueBorder),
+                                    ),
+                                    child: Icon(
+                                      _isBalanceVisible ? Icons.visibility : Icons.visibility_off,
+                                      color: AppColors.agentBlue,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              dashState.wallet != null
+                                  ? _isBalanceVisible ? '₦${dashState.wallet!.balance.toStringAsFixed(2)}' : '₦****'
+                                  : '₦0.00',
+                              style: const TextStyle(color: AppColors.agentTextDark, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -1),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Primary balance for student token top-ups and transfers.',
+                              style: TextStyle(color: AppColors.agentTextLight, fontSize: 13, height: 1.4),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                      // ── Top Up Button ──────────────────────────────────────
-                      OutlinedButton.icon(
-                        onPressed: () => context.push(AppRoutes.topupScan),
-                        icon: const Icon(Icons.qr_code_scanner),
-                        label: const Text('Top-Up via Admin QR'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.agentPrimary,
-                          side: const BorderSide(color: AppColors.agentPrimary),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      // ── Top Up via Admin QR ────────────────────────────────
+                      GestureDetector(
+                        onTap: () => context.push(AppRoutes.topupScan),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.agentCardWhite,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: AppColors.agentGreenText.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                                child: const Icon(Icons.qr_code_scanner, color: AppColors.agentGreenText, size: 22),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text('Top-Up via Admin QR', style: TextStyle(color: AppColors.agentTextDark, fontSize: 15, fontWeight: FontWeight.w700)),
+                                    SizedBox(height: 2),
+                                    Text('Receive funds from an admin QR code.', style: TextStyle(color: AppColors.agentTextLight, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right, color: AppColors.agentTextLight, size: 20),
+                            ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
 
-                      // ── Transfer Button ────────────────────────────────────
-                      PrimaryButton(
-                        label: AppStrings.agentTransferButton,
-                        gradient: AppColors.agentGradient,
-                        onPressed: () => context.push(AppRoutes.agentTransfer),
+                      // ── Transfer to Student ────────────────────────────────
+                      GestureDetector(
+                        onTap: () => context.push(AppRoutes.agentTransfer),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.agentBlue,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [BoxShadow(color: AppColors.agentBlue.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 6))],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
+                                child: const Icon(Icons.arrow_forward, color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Transfer to Student', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                                    const SizedBox(height: 2),
+                                    Text('Send tokens to a student account.', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right, color: Colors.white, size: 20),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 32),
 
-                      // ── Recent Activity ────────────────────────────────────
-                      const Text(
-                        'Recent Activity',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
+                      // ── Recent Activity Header ─────────────────────────────
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Recent Activity',
+                            style: TextStyle(color: AppColors.agentTextDark, fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
+                          if (dashState.recentTransactions.isNotEmpty)
+                            GestureDetector(
+                              onTap: () => ref.read(agentTabIndexProvider.notifier).state = 2, // 2 is Ledger
+                              child: const Text('View All', style: TextStyle(color: AppColors.agentBlue, fontSize: 13, fontWeight: FontWeight.w600)),
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
+                      // ── Recent Activity List ───────────────────────────────
                       if (dashState.recentTransactions.isEmpty)
                         const _EmptyTransactions()
                       else
-                        ...dashState.recentTransactions
-                            .take(5) // Show only the 5 most recent
-                            .map((tx) => _TransactionTile(transaction: tx)),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.agentCardWhite,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                          ),
+                          child: Column(
+                            children: dashState.recentTransactions.take(5).toList().asMap().entries.map((entry) {
+                              final int idx = entry.key;
+                              final tx = entry.value;
+                              final isLast = idx == (dashState.recentTransactions.length > 5 ? 4 : dashState.recentTransactions.length - 1);
+                              return Column(
+                                children: [
+                                  _TransactionTile(transaction: tx),
+                                  if (!isLast) const Divider(height: 1, color: Color(0xFFE2E8F0), indent: 16, endIndent: 16),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
                     ],
                   ),
                 ),
+      ),
     );
   }
 }
@@ -214,11 +282,7 @@ class _ErrorState extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, color: AppColors.error, size: 48),
             const SizedBox(height: 16),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.agentTextLight)),
           ],
         ),
       ),
@@ -232,17 +296,33 @@ class _EmptyTransactions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.agentCardWhite,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: const Center(
-        child: Text(
-          'No transfers yet. Start by sending tokens to a student.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9), // Light gray circle
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.folder_outlined, color: AppColors.agentTextLight, size: 28),
+            ),
+            const SizedBox(height: 16),
+            const Text('No transfers yet', style: TextStyle(color: AppColors.agentTextDark, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            const Text(
+              'Start by sending tokens to a student.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.agentTextLight, fontSize: 13),
+            ),
+          ],
         ),
       ),
     );
@@ -255,52 +335,49 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
+    // If it's a wholesale transaction (admin -> agent), it's inbound
+    final isInbound = transaction.type == TransactionType.wholesale;
+    
+    final iconBgColor = isInbound ? AppColors.agentGreenArrow : AppColors.agentRedArrow;
+    final iconColor = isInbound ? AppColors.agentGreenText : AppColors.agentRedText;
+    final iconData = isInbound ? Icons.arrow_downward : Icons.arrow_upward;
+    
+    final title = isInbound ? 'Admin Top-Up' : 'Student Transfer';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.agentSurface,
-              borderRadius: BorderRadius.circular(10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: iconBgColor, shape: BoxShape.circle),
+            child: Transform.rotate(
+              angle: isInbound ? 0.785398 : 0.785398, // 45 degrees
+              child: Icon(iconData, color: iconColor, size: 18),
             ),
-            child: const Icon(Icons.send, color: AppColors.agentLight, size: 16),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  transaction.displayDescription,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
+                  title,
+                  style: const TextStyle(color: AppColors.agentTextDark, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  '${transaction.timestamp.day}/${transaction.timestamp.month}/${transaction.timestamp.year} · ${transaction.timestamp.hour}:${transaction.timestamp.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 11,
-                  ),
+                  '${transaction.timestamp.day.toString().padLeft(2,'0')}/${transaction.timestamp.month.toString().padLeft(2,'0')}/${transaction.timestamp.year} · ${transaction.timestamp.hour.toString().padLeft(2,'0')}:${transaction.timestamp.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: AppColors.agentTextLight, fontSize: 11),
                 ),
               ],
             ),
           ),
           Text(
-            '-₦${transaction.amount.toStringAsFixed(2)}',
-            style: const TextStyle(
-              color: AppColors.error,
-              fontWeight: FontWeight.w600,
+            isInbound ? '+₦${transaction.amount.toStringAsFixed(2)}' : '-₦${transaction.amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              color: isInbound ? AppColors.agentGreenText : AppColors.agentRedText,
+              fontWeight: FontWeight.w700,
               fontSize: 14,
             ),
           ),

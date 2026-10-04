@@ -20,7 +20,10 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/constants/app_routes.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/loading_overlay.dart';
+import '../../core/utils/app_bottom_sheets.dart';
 import '../../viewmodels/agent_dashboard_viewmodel.dart';
+import 'shared/pin_input_widget.dart';
 import '../shared/primary_button.dart';
 
 /// The Retail Transfer screen for Agents.
@@ -38,40 +41,32 @@ class RetailTransferView extends ConsumerStatefulWidget {
 class _RetailTransferViewState extends ConsumerState<RetailTransferView> {
   final _walletIdController = TextEditingController();
   final _amountController = TextEditingController();
-  bool _showScanner = false;
-  MobileScannerController? _scannerController;
 
   @override
   void dispose() {
     _walletIdController.dispose();
     _amountController.dispose();
-    _scannerController?.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _openScanner() {
-    _scannerController = MobileScannerController();
-    setState(() => _showScanner = true);
-  }
-
-  void _closeScanner() {
-    _scannerController?.dispose();
-    _scannerController = null;
-    setState(() => _showScanner = false);
-  }
-
-  /// Called when a QR code barcode is detected by the scanner.
-  void _onScanDetect(BarcodeCapture capture) {
-    final barcode = capture.barcodes.firstOrNull;
-    if (barcode?.rawValue != null) {
-      // The QR code should contain the student's wallet UUID.
-      _walletIdController.text = barcode!.rawValue!;
-      _closeScanner();
+  Future<void> _openScanner() async {
+    final scannedId = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.8),
+      builder: (context) => const _QrScannerDialog(),
+    );
+    if (scannedId != null) {
+      setState(() {
+        _walletIdController.text = scannedId;
+      });
     }
   }
 
+  final _scrollController = ScrollController();
+
   /// Calls the ViewModel's transfer action.
-  void _onSubmitTransfer() {
+  Future<void> _onSubmitTransfer() async {
     final walletId = _walletIdController.text.trim();
     final amountText = _amountController.text.trim();
 
@@ -83,79 +78,137 @@ class _RetailTransferViewState extends ConsumerState<RetailTransferView> {
     final dashState = ref.read(agentDashboardViewModelProvider);
     final agentWalletId = dashState.wallet?.id;
     if (agentWalletId == null) return;
+    
+    final currentBalance = dashState.wallet?.balance ?? 0;
+    if (currentBalance < 100) {
+      AppBottomSheets.showInsufficientFunds(
+        context,
+        onTopUp: () {
+          // This should navigate to top-up, but for now we just dismiss
+        },
+      );
+      return;
+    }
 
-    // Delegate to the ViewModel — the View does not touch Supabase.
-    ref.read(agentDashboardViewModelProvider.notifier).transferToStudent(
+    // Always require a PIN
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter your transaction PIN'),
+        content: PinInputWidget(
+          onChanged: (_) {},
+          onCompleted: (pin) => Navigator.pop(ctx, pin),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+    
+    if (pin == null) return; // User cancelled
+
+    if (!mounted) return;
+    LoadingOverlay.show(context);
+
+    // Delegate to the ViewModel — await so we know when it's done.
+    await ref.read(agentDashboardViewModelProvider.notifier).transferToStudent(
           agentWalletId: agentWalletId,
           studentWalletId: walletId,
           amount: amount,
+          pin: pin,
         );
+
+    if (mounted) {
+      LoadingOverlay.hide(context);
+    }
+
+    // Scroll to top so the agent immediately sees the updated balance card.
+    if (mounted) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final dashState = ref.watch(agentDashboardViewModelProvider);
 
-    // Navigate back to dashboard after successful transfer.
-    ref.listen<AgentDashboardState>(agentDashboardViewModelProvider,
-        (_, next) {
+    // Clear form fields after a successful transfer.
+    ref.listen<AgentDashboardState>(agentDashboardViewModelProvider, (_, next) {
       if (next.transferSuccess != null) {
-        // Clear controllers
         _walletIdController.clear();
         _amountController.clear();
       }
     });
 
     return Scaffold(
+      backgroundColor: AppColors.agentLightBackground,
       appBar: AppBar(
-        title: const Text(AppStrings.agentTransferTitle),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('Transfer to Student', style: TextStyle(color: AppColors.agentTextDark, fontSize: 20, fontWeight: FontWeight.w800)),
+            Text('Manual Wallet ID entry', style: TextStyle(color: AppColors.agentTextLight, fontSize: 13, fontWeight: FontWeight.w400)),
+          ],
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 18),
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE2E8F0))),
+            child: const Icon(Icons.arrow_back_ios_new, size: 14, color: AppColors.agentTextDark),
+          ),
           onPressed: () => context.go(AppRoutes.agentDashboard),
         ),
       ),
-      body: _showScanner
-          ? _QrScannerOverlay(
-              controller: _scannerController!,
-              onDetect: _onScanDetect,
-              onClose: _closeScanner,
-            )
-          : SingleChildScrollView(
+      body: SingleChildScrollView(
+              controller: _scrollController,
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Available Balance ──────────────────────────────────────
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: AppColors.agentGradient,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.account_balance_wallet,
-                            color: Colors.white, size: 20),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'Available Balance',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
+                              'AVAILABLE BALANCE',
+                              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.5),
                             ),
-                            Text(
-                              '₦${dashState.wallet?.balance.toStringAsFixed(2) ?? '0.00'}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 20,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
                               ),
+                              child: const Text('Wallet ID', style: TextStyle(color: Colors.white, fontSize: 11)),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '₦${dashState.wallet?.balance.toStringAsFixed(2) ?? '0.00'}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 32),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Agent wallet balance available for student transfers',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                       ],
                     ),
@@ -216,15 +269,13 @@ class _RetailTransferViewState extends ConsumerState<RetailTransferView> {
                           height: 52,
                           width: 52,
                           decoration: BoxDecoration(
-                            color: AppColors.agentSurface,
+                            color: AppColors.agentBlue,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: AppColors.agentPrimary.withValues(alpha: 0.4)),
                           ),
                           child: const Icon(
                             Icons.qr_code_scanner,
-                            color: AppColors.agentLight,
-                            size: 22,
+                            color: Colors.white,
+                            size: 24,
                           ),
                         ),
                       ),
@@ -273,69 +324,147 @@ class _RetailTransferViewState extends ConsumerState<RetailTransferView> {
   }
 }
 
-// ── QR Scanner Overlay ────────────────────────────────────────────────────────
+// ── QR Scanner Dialog ────────────────────────────────────────────────────────
 
-class _QrScannerOverlay extends StatelessWidget {
-  final MobileScannerController controller;
-  final void Function(BarcodeCapture) onDetect;
-  final VoidCallback onClose;
+class _QrScannerDialog extends StatefulWidget {
+  const _QrScannerDialog();
 
-  const _QrScannerOverlay({
-    required this.controller,
-    required this.onDetect,
-    required this.onClose,
-  });
+  @override
+  State<_QrScannerDialog> createState() => _QrScannerDialogState();
+}
+
+class _QrScannerDialogState extends State<_QrScannerDialog> {
+  final MobileScannerController _controller = MobileScannerController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        MobileScanner(
-          controller: controller,
-          onDetect: onDetect,
-        ),
-        // Close button overlay
-        Positioned(
-          top: 16,
-          left: 16,
-          child: SafeArea(
-            child: GestureDetector(
-              onTap: onClose,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(10),
+    return Dialog(
+      backgroundColor: AppColors.authSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Scan Student QR', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                      SizedBox(height: 4),
+                      Text('Scanning autofills Wallet ID', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    ],
+                  ),
                 ),
-                child: const Icon(Icons.close, color: Colors.white),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Container(
+              height: 240,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.transparent),
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  MobileScanner(
+                    controller: _controller,
+                    onDetect: (capture) {
+                      final barcode = capture.barcodes.firstOrNull;
+                      if (barcode?.rawValue != null) {
+                        Navigator.pop(context, barcode!.rawValue);
+                      }
+                    },
+                  ),
+                  CustomPaint(
+                    painter: _ScannerBracketPainter(),
+                  ),
+                ],
               ),
             ),
-          ),
-        ),
-        // Scanning guide overlay
-        Center(
-          child: Container(
-            width: 220,
-            height: 220,
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.agentLight, width: 2),
-              borderRadius: BorderRadius.circular(16),
+            const SizedBox(height: 20),
+            const Text(
+              'Align QR code within the frame',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
-          ),
+          ],
         ),
-        Positioned(
-          bottom: 40,
-          left: 0,
-          right: 0,
-          child: const Text(
-            'Align QR code within the frame',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-        ),
-      ],
+      ),
     );
   }
+}
+
+class _ScannerBracketPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.agentGreenText
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    const double cornerLength = 30.0;
+    const double padding = 20.0;
+
+    // Top Left
+    canvas.drawPath(
+      Path()
+        ..moveTo(padding, padding + cornerLength)
+        ..lineTo(padding, padding)
+        ..lineTo(padding + cornerLength, padding),
+      paint,
+    );
+
+    // Top Right
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width - padding - cornerLength, padding)
+        ..lineTo(size.width - padding, padding)
+        ..lineTo(size.width - padding, padding + cornerLength),
+      paint,
+    );
+
+    // Bottom Left
+    canvas.drawPath(
+      Path()
+        ..moveTo(padding, size.height - padding - cornerLength)
+        ..lineTo(padding, size.height - padding)
+        ..lineTo(padding + cornerLength, size.height - padding),
+      paint,
+    );
+
+    // Bottom Right
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width - padding - cornerLength, size.height - padding)
+        ..lineTo(size.width - padding, size.height - padding)
+        ..lineTo(size.width - padding, size.height - padding - cornerLength),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ── Feedback Banner ───────────────────────────────────────────────────────────

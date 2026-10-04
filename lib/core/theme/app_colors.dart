@@ -46,21 +46,21 @@ class AppColors {
   /// Muted text — placeholders and subtle hints.
   static const Color textMuted = Color(0xFF475569);
 
-  // ── Agent Accent (Indigo / Violet) ────────────────────────────────────────
-  /// Primary Agent accent colour. Used for buttons, active states.
-  static const Color agentPrimary = Color(0xFF6366F1);
+  // ── Agent Accent (Emerald / Green) ────────────────────────────────────────
+  /// Primary Agent accent colour (Green). Used for buttons, active states.
+  static const Color agentPrimary = Color(0xFF10B981);
 
   /// Lighter Agent accent. Used for icons and highlights.
-  static const Color agentLight = Color(0xFF818CF8);
+  static const Color agentLight = Color(0xFF34D399);
 
   /// Subtle Agent background tint. Used for card backgrounds.
-  static const Color agentSurface = Color(0xFF1E1B4B);
+  static const Color agentSurface = Color(0xFFECFDF5);
 
   /// Agent gradient: start colour.
-  static const Color agentGradientStart = Color(0xFF6366F1);
+  static const Color agentGradientStart = Color(0xFF047857);
 
   /// Agent gradient: end colour.
-  static const Color agentGradientEnd = Color(0xFF7C3AED);
+  static const Color agentGradientEnd = Color(0xFF10B981);
 
   // ── Driver Accent (Emerald / Cyan) ────────────────────────────────────────
   /// Primary Driver accent colour. Used for buttons, active states.
@@ -78,8 +78,24 @@ class AppColors {
   /// Driver gradient: end colour.
   static const Color driverGradientEnd = Color(0xFF0891B2);
 
-  // ── Flash Colour (Driver Boarding Event) ──────────────────────────────────
-  /// Full-screen flash colour when a passenger boards.
+  // ── Passenger Accent (Sky / Cyan) ─────────────────────────────────────────
+  /// Primary Passenger accent colour. Used for wallet, buttons, highlights.
+  static const Color passengerPrimary = Color(0xFF0EA5E9);
+
+  /// Lighter Passenger accent.
+  static const Color passengerLight = Color(0xFF38BDF8);
+
+  /// Subtle Passenger background tint.
+  static const Color passengerSurface = Color(0xFF082F49);
+
+  /// Passenger gradient: start colour.
+  static const Color passengerGradientStart = Color(0xFF0EA5E9);
+
+  /// Passenger gradient: end colour.
+  static const Color passengerGradientEnd = Color(0xFF06B6D4);
+
+  // ── Flash Colour (Driver Boarding & Passenger Topup Event) ────────────────
+  /// Full-screen flash colour when a passenger boards or tops up.
   /// Deliberately vivid for instant visibility.
   static const Color boardingFlash = Color(0xFF00FF88);
 
@@ -93,6 +109,23 @@ class AppColors {
   /// Warning state — low balance, GPS inactive.
   static const Color warning = Color(0xFFF59E0B);
 
+  // ── NEW: Auth Redesign Colors (Dark) ──────────────────────────────────────
+  static const Color authBackground = Color(0xFF0F141E); // Very dark navy
+  static const Color authSurface = Color(0xFF161A25);    // Inputs, cards
+  static const Color authPrimary = Color(0xFF18C07A);    // Vibrant green
+
+  // ── NEW: Agent Dashboard Redesign Colors (Light) ──────────────────────────
+  static const Color agentLightBackground = Color(0xFFF8FAFC);
+  static const Color agentCardWhite = Color(0xFFFFFFFF);
+  static const Color agentBlue = Color(0xFF10B981);      // Main green accent
+  static const Color agentBlueBorder = Color(0xFFA7F3D0); // Token wallet emerald border
+  static const Color agentTextDark = Color(0xFF1E293B);
+  static const Color agentTextLight = Color(0xFF64748B);
+  static const Color agentGreenArrow = Color(0xFFD1FADF); // Light green bg for arrow
+  static const Color agentGreenText = Color(0xFF039855);  // Income text
+  static const Color agentRedArrow = Color(0xFFFEE4E2);   // Light red bg for arrow
+  static const Color agentRedText = Color(0xFFD92D20);    // Expense text
+
   // ── Gradient Shorthand ────────────────────────────────────────────────────
   /// Returns the Agent mode linear gradient.
   static const LinearGradient agentGradient = LinearGradient(
@@ -104,6 +137,13 @@ class AppColors {
   /// Returns the Driver mode linear gradient.
   static const LinearGradient driverGradient = LinearGradient(
     colors: [driverGradientStart, driverGradientEnd],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// Returns the Passenger mode linear gradient.
+  static const LinearGradient passengerGradient = LinearGradient(
+    colors: [passengerGradientStart, passengerGradientEnd],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

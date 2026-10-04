@@ -92,7 +92,7 @@ class AuthRepository {
     logger.d('[AuthRepository] Querying users table for id: ${authUser.id}');
     final userData = await _client
         .from('users')
-        .select()
+        .select('id, name, first_name, last_name, username, phone, department, role')
         .eq('id', authUser.id)
         .single();
 
@@ -101,6 +101,141 @@ class AuthRepository {
 
     logger.i('[AuthRepository] ✅ Sign-in successful for ${userModel.name} (${userModel.role.toDbString()})');
     return userModel;
+  }
+
+  // ── Sign Up & OTP (Student) ───────────────────────────────────────────────
+
+  /// Signs up a new student (passenger) using email and password.
+  /// 
+  /// The [firstName] is stored in `raw_user_meta_data`.
+  Future<void> signUpStudent({
+    required String email,
+    required String password,
+    required String firstName,
+  }) async {
+    logger.i('[AuthRepository] signUpStudent() → email: $email');
+    await _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {
+        'first_name': firstName,
+        'role': UserRole.student.toDbString(),
+      },
+    );
+    logger.i('[AuthRepository] ✅ signUpStudent request sent (OTP expected)');
+  }
+
+  /// Verifies the OTP sent to the user's email during sign up.
+  /// 
+  /// Returns the authenticated user's ID upon success.
+  Future<String> verifyOtp({
+    required String email,
+    required String otp,
+  }) async {
+    logger.i('[AuthRepository] verifyOtp() → email: $email');
+    final response = await _client.auth.verifyOTP(
+      type: OtpType.signup,
+      token: otp,
+      email: email,
+    );
+    
+    final authUser = response.user;
+    if (authUser == null) {
+      throw Exception('OTP Verification failed: No user returned.');
+    }
+    logger.i('[AuthRepository] ✅ OTP verified for ${authUser.id}');
+    return authUser.id;
+  }
+
+  /// Updates or inserts the user's profile in the `users` table.
+  /// 
+  /// Called during the onboarding step or right after OTP verification if no 
+  /// database trigger automatically syncs `auth.users` to `public.users`.
+  Future<UserModel> createStudentProfile({
+    required String userId,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? department,
+    String? username,
+  }) async {
+    logger.i('[AuthRepository] createStudentProfile() → userId: $userId');
+    
+    final insertData = {
+      'id': userId,
+      'role': UserRole.student.toDbString(),
+      'name': '$firstName ${lastName ?? ''}'.trim(),
+      'first_name': firstName,
+      if (lastName != null) 'last_name': lastName,
+      if (phone != null) 'phone': phone,
+      if (department != null) 'department': department,
+      if (username != null) 'username': username,
+    };
+
+    final userData = await _client
+        .from('users')
+        .insert(insertData)
+        .select('id, name, first_name, last_name, username, phone, department, role')
+        .single();
+        
+    final userModel = UserModel.fromJson(userData);
+    logger.i('[AuthRepository] ✅ Profile created for ${userModel.name}');
+
+    // Create a wallet for the new student
+    try {
+      await _client.from('wallets').insert({
+        'owner_id': userId,
+        'wallet_type': 'Student_Wallet',
+        'balance': 0.0,
+      });
+      logger.i('[AuthRepository] ✅ Wallet created for ${userModel.name}');
+    } catch (e) {
+      logger.w('[AuthRepository] ⚠️ Could not create wallet (might already exist): $e');
+    }
+
+    return userModel;
+  }
+
+  Future<UserModel> updateUserProfile({
+    required String userId,
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? department,
+    String? username,
+  }) async {
+    logger.i('[AuthRepository] updateUserProfile() → userId: $userId');
+    
+    final updateData = {
+      'first_name': firstName,
+      'last_name': lastName,
+      'username': username,
+      'phone': phone,
+      'department': department,
+      'name': '$firstName ${lastName ?? ''}'.trim(),
+    };
+
+    final userData = await _client
+        .from('users')
+        .update(updateData)
+        .eq('id', userId)
+        .select('id, name, first_name, last_name, username, phone, department, role')
+        .single();
+        
+    final userModel = UserModel.fromJson(userData);
+    logger.i('[AuthRepository] ✅ Profile updated for ${userModel.name}');
+
+    return userModel;
+  }
+
+  Future<void> setTransactionPin(String pin) async {
+    logger.i('[AuthRepository] setTransactionPin()');
+    await _client.rpc('set_transaction_pin', params: {'p_pin': pin});
+    logger.i('[AuthRepository] ✅ Transaction PIN updated');
+  }
+
+  Future<bool> hasTransactionPin() async {
+    return await _client.rpc('has_transaction_pin') as bool;
   }
 
   // ── Sign Out ──────────────────────────────────────────────────────────────
@@ -132,7 +267,7 @@ class AuthRepository {
     try {
       final userData = await _client
           .from('users')
-          .select()
+          .select('id, name, first_name, last_name, username, phone, department, role')
           .eq('id', authUser.id)
           .single();
       final user = UserModel.fromJson(userData);

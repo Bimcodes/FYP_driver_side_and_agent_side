@@ -15,6 +15,8 @@
 //   This service checks and requests those permissions before locating.
 // =============================================================================
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -74,16 +76,23 @@ class LocationService {
 
     // Step 5: Permissions are granted — get the position.
     // LocationAccuracy.high uses GPS hardware for best accuracy.
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-      ),
-    );
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      ).timeout(const Duration(seconds: 3));
 
-    return LatLng(
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
+      return LatLng(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+    } on TimeoutException {
+      // If it takes more than 3 seconds, just return null so we don't hold up boarding
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 }
 

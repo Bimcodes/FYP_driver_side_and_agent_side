@@ -43,79 +43,61 @@ class TransactionRepository {
 
   const TransactionRepository(this._client);
 
-  // ── Write ─────────────────────────────────────────────────────────────────
-
-  /// Records a completed token transfer in the `transactions` table.
-  ///
-  /// Called by the AgentDashboardViewModel AFTER both wallet balances
-  /// have been successfully updated. This creates the audit trail.
-  ///
-  /// Parameters:
-  ///   [type]               — Always TransactionType.fare for Agent → Student transfers
-  ///   [senderWalletId]     — The Agent's wallet UUID (tokens leave from here)
-  ///   [receiverWalletId]   — The Student's or Driver's wallet UUID (tokens arrive here)
-  ///   [amount]             — Number of tokens transferred
-  ///   [reference]          — Optional external reference (null for mobile FARE transfers)
-  ///
-  /// Returns the newly created [TransactionModel] with its Supabase-generated UUID.
-  Future<TransactionModel> createTransaction({
-    required TransactionType type,
-    required String? senderWalletId,
-    required String? receiverWalletId,
-    required double amount,
-    String? reference,
+  Future<String> payFare({
+    required String busVaultId,
+    required String stopId,
+    required int passengers,
+    required String pin,
+    double? lat,
+    double? lng,
   }) async {
-    logger.i(
-      '[TransactionRepository] createTransaction() → '
-      'type: ${type.toDbString()} | '
-      'sender: $senderWalletId | '
-      'receiver: $receiverWalletId | '
-      'amount: ₦$amount',
-    );
+    final id = await _client.rpc('pay_fare', params: {
+      'p_bus_vault': busVaultId,
+      'p_stop_id': stopId,
+      'p_passengers': passengers,
+      'p_pin': pin,
+      'p_lat': lat,
+      'p_lng': lng,
+    });
+    return id as String;
+  }
 
-    final payload = {
-      'type': type.toDbString(),
-      'sender_wallet_id': senderWalletId,
-      'receiver_wallet_id': receiverWalletId,
-      'amount': amount,
-      'reference': reference,
-      'status': TransactionStatus.success.toDbString(),
-    };
-
-    final data = await _client
-        .from('transactions')
-        .insert(payload)
-        .select()
-        .single();
-
-    final tx = TransactionModel.fromJson(data);
-    logger.i('[TransactionRepository] ✅ Transaction created — id: ${tx.id}');
-    return tx;
+  Future<String> retailTransfer({
+    required String studentWalletId,
+    required double amount,
+    required String pin,
+  }) async {
+    final id = await _client.rpc('retail_transfer', params: {
+      'p_student_wallet': studentWalletId,
+      'p_amount': amount,
+      'p_pin': pin,
+    });
+    return id as String;
   }
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  /// Fetches recent transactions where [walletId] was the sender.
+  /// Fetches recent transactions where [walletId] was the sender or receiver.
   ///
-  /// Used by the Agent History view to show their recent transfers.
+  /// Used by the Agent History view to show their recent transfers and top-ups.
   /// Ordered by timestamp descending (newest first). Limited to 50 rows.
-  Future<List<TransactionModel>> getTransactionsBySenderWallet(
+  Future<List<TransactionModel>> getAgentTransactions(
     String walletId,
   ) async {
     if (walletId.isEmpty) {
-      logger.d('[TransactionRepository] getTransactionsBySenderWallet() — empty walletId, returning []');
+      logger.d('[TransactionRepository] getAgentTransactions() — empty walletId, returning []');
       return [];
     }
-    logger.d('[TransactionRepository] getTransactionsBySenderWallet() → walletId: $walletId');
+    logger.d('[TransactionRepository] getAgentTransactions() → walletId: $walletId');
     final data = await _client
         .from('transactions')
         .select()
-        .eq('sender_wallet_id', walletId)
+        .or('sender_wallet_id.eq.$walletId,receiver_wallet_id.eq.$walletId')
         .order('timestamp', ascending: false)
         .limit(50);
 
     final list = (data as List).map((row) => TransactionModel.fromJson(row)).toList();
-    logger.i('[TransactionRepository] ✅ Fetched ${list.length} sender transactions');
+    logger.i('[TransactionRepository] ✅ Fetched ${list.length} agent transactions');
     return list;
   }
 
@@ -135,6 +117,23 @@ class TransactionRepository {
 
     final list = (data as List).map((row) => TransactionModel.fromJson(row)).toList();
     logger.i('[TransactionRepository] ✅ Fetched ${list.length} receiver transactions');
+    return list;
+  }
+
+  /// Fetches all transactions involving [walletId] (either as sender or receiver).
+  /// Used by Passenger to view their full ledger of top-ups and fare payments.
+  Future<List<TransactionModel>> getStudentTransactions(String walletId) async {
+    if (walletId.isEmpty) return [];
+    logger.d('[TransactionRepository] getStudentTransactions() → walletId: $walletId');
+    final data = await _client
+        .from('transactions')
+        .select()
+        .or('sender_wallet_id.eq.$walletId,receiver_wallet_id.eq.$walletId')
+        .order('timestamp', ascending: false)
+        .limit(100);
+
+    final list = (data as List).map((row) => TransactionModel.fromJson(row)).toList();
+    logger.i('[TransactionRepository] ✅ Fetched ${list.length} student transactions');
     return list;
   }
 

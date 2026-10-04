@@ -58,12 +58,23 @@ class FakeWalletRepository implements WalletRepository {
   FakeWalletRepository(this._wallets);
 
   @override
-  Future<WalletModel> getWalletByOwnerId(String ownerId) async {
-    final wallet = _wallets.values.firstWhere(
-      (w) => w.ownerId == ownerId,
-      orElse: () => throw Exception('Wallet not found for owner: $ownerId'),
+  Future<WalletModel> getWalletByOwnerId(String ownerId, {bool createIfMissing = false}) async {
+    for (final w in _wallets.values) {
+      if (w.ownerId == ownerId) {
+        return w;
+      }
+    }
+    if (!createIfMissing) {
+      throw Exception('Wallet not found for owner: $ownerId');
+    }
+    final newWallet = WalletModel(
+      id: 'lazy_wallet_$ownerId',
+      ownerId: ownerId,
+      walletType: WalletType.studentWallet,
+      balance: 0.0,
     );
-    return wallet;
+    _wallets[newWallet.id] = newWallet;
+    return newWallet;
   }
 
   @override
@@ -73,7 +84,6 @@ class FakeWalletRepository implements WalletRepository {
 
   /// Simulates updateBalance by adjusting the in-memory balance.
   /// Returns the wallet with the new balance (mirrors real Supabase behaviour).
-  @override
   Future<WalletModel> updateBalance({
     required String walletId,
     required double delta,
@@ -84,6 +94,9 @@ class FakeWalletRepository implements WalletRepository {
     _wallets[walletId] = updated;
     return updated;
   }
+
+  @override
+  Stream<WalletModel> watchWallet(String walletId) => const Stream.empty();
 }
 
 /// A fake TransactionRepository that records created transactions in memory.
@@ -91,33 +104,56 @@ class FakeWalletRepository implements WalletRepository {
 /// Tests can inspect [createdTransactions] to verify the right audit record
 /// was written after a transfer.
 class FakeTransactionRepository implements TransactionRepository {
-  /// Stores all transactions created during the test.
+  final FakeWalletRepository walletRepo;
   final List<TransactionModel> createdTransactions = [];
 
+  FakeTransactionRepository(this.walletRepo);
+
   @override
-  Future<TransactionModel> createTransaction({
-    required TransactionType type,
-    required String? senderWalletId,
-    required String? receiverWalletId,
-    required double amount,
-    String? reference,
+  Future<String> payFare({
+    required String busVaultId,
+    required String stopId,
+    required int passengers,
+    required String pin,
+    double? lat,
+    double? lng,
   }) async {
+    return 'fake-fare-id';
+  }
+
+  @override
+  Future<String> retailTransfer({
+    required String studentWalletId,
+    required double amount,
+    required String pin,
+  }) async {
+    // In a test, we assume the agent vault is the one we want to deduct from
+    final agentWallet = walletRepo._wallets.values.firstWhere(
+      (w) => w.walletType == WalletType.agentVault,
+      orElse: () => throw Exception('Agent vault not found in FakeWalletRepository'),
+    );
+    
+    await walletRepo.updateBalance(walletId: agentWallet.id, delta: -amount);
+    await walletRepo.updateBalance(walletId: studentWalletId, delta: amount);
+
     final tx = TransactionModel(
       id: 'tx-fake-${createdTransactions.length + 1}',
-      type: type,
-      senderWalletId: senderWalletId,
-      receiverWalletId: receiverWalletId,
+      type: TransactionType.retail,
+      senderWalletId: agentWallet.id,
+      receiverWalletId: studentWalletId,
       amount: amount,
-      reference: reference,
       status: TransactionStatus.success,
       timestamp: DateTime.now(),
     );
     createdTransactions.add(tx);
-    return tx;
+    return tx.id;
   }
 
   @override
-  Future<List<TransactionModel>> getTransactionsBySenderWallet(String walletId) async => [];
+  Future<List<TransactionModel>> getStudentTransactions(String walletId) async => [];
+
+  @override
+  Future<List<TransactionModel>> getAgentTransactions(String walletId) async => [];
 
   @override
   Future<List<TransactionModel>> getTransactionsByReceiverWallet(String walletId) async => [];
@@ -170,7 +206,7 @@ ProviderContainer _buildContainer({
   };
 
   final fakeWalletRepo = FakeWalletRepository(wallets);
-  final fakeTxRepo = FakeTransactionRepository();
+  final fakeTxRepo = FakeTransactionRepository(fakeWalletRepo);
 
   final container = ProviderContainer(
     overrides: [
@@ -205,6 +241,7 @@ void main() {
         agentWalletId: _agentWalletId,
         studentWalletId: _studentWalletId,
         amount: 200,
+        pin: '1234',
       );
 
       // Assert: state reflects the transfer
@@ -222,7 +259,7 @@ void main() {
         _studentWalletId: _studentWallet(0),
       };
       final fakeWalletRepo = FakeWalletRepository(fakeWallets);
-      final fakeTxRepo = FakeTransactionRepository();
+      final fakeTxRepo = FakeTransactionRepository(fakeWalletRepo);
       final container = ProviderContainer(overrides: [
         walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
         transactionRepositoryProvider.overrideWithValue(fakeTxRepo),
@@ -237,12 +274,13 @@ void main() {
             agentWalletId: _agentWalletId,
             studentWalletId: _studentWalletId,
             amount: 150,
+            pin: '1234',
           );
 
       // Assert: one FARE transaction was logged
       expect(fakeTxRepo.createdTransactions.length, equals(1));
       final tx = fakeTxRepo.createdTransactions.first;
-      expect(tx.type, equals(TransactionType.fare));
+      expect(tx.type, equals(TransactionType.retail));
       expect(tx.senderWalletId, equals(_agentWalletId));
       expect(tx.receiverWalletId, equals(_studentWalletId));
       expect(tx.amount, equals(150));
@@ -274,6 +312,7 @@ void main() {
             agentWalletId: _agentWalletId,
             studentWalletId: _studentWalletId,
             amount: 100,
+            pin: '1234',
           );
 
       // Assert: new transaction is FIRST (prepended), old is second
@@ -293,6 +332,7 @@ void main() {
         agentWalletId: _agentWalletId,
         studentWalletId: _studentWalletId,
         amount: 0,
+        pin: '1234',
       );
 
       final state = container.read(agentDashboardViewModelProvider);
@@ -309,6 +349,7 @@ void main() {
         agentWalletId: _agentWalletId,
         studentWalletId: _studentWalletId,
         amount: -100,
+        pin: '1234',
       );
 
       final state = container.read(agentDashboardViewModelProvider);
@@ -327,6 +368,7 @@ void main() {
         agentWalletId: _agentWalletId,
         studentWalletId: _studentWalletId,
         amount: 500,
+        pin: '1234',
       );
 
       final state = container.read(agentDashboardViewModelProvider);
@@ -346,6 +388,7 @@ void main() {
             agentWalletId: _agentWalletId,
             studentWalletId: _studentWalletId,
             amount: 100,
+            pin: '1234',
           );
 
       final state = container.read(agentDashboardViewModelProvider);
@@ -368,6 +411,7 @@ void main() {
             agentWalletId: _agentWalletId,
             studentWalletId: 'wallet-does-not-exist',
             amount: 100,
+            pin: '1234',
           );
 
       final state = container.read(agentDashboardViewModelProvider);

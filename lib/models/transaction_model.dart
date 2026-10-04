@@ -33,7 +33,10 @@ enum TransactionType {
   /// Admin distributes tokens from Treasury to an Agent's Vault.
   wholesale,
 
-  /// Token payment from an Agent to a Student, or Student to a Driver.
+  /// Agent distributes tokens to a Student's Wallet (Retail vending).
+  retail,
+
+  /// Token payment from Student to a Driver / Bus.
   fare,
 
   /// Tokens are removed from circulation (e.g., at midnight reconciliation).
@@ -41,11 +44,13 @@ enum TransactionType {
 
   /// Parses the database string into a [TransactionType] enum.
   static TransactionType fromString(String value) {
-    switch (value) {
+    switch (value.toUpperCase()) {
       case 'MINT':
         return TransactionType.mint;
       case 'WHOLESALE':
         return TransactionType.wholesale;
+      case 'RETAIL':
+        return TransactionType.retail;
       case 'FARE':
         return TransactionType.fare;
       case 'BURN':
@@ -178,6 +183,8 @@ class TransactionModel {
     switch (type) {
       case TransactionType.fare:
         return 'Fare Payment';
+      case TransactionType.retail:
+        return 'Retail Token Vending';
       case TransactionType.wholesale:
         return 'Wholesale Token Purchase';
       case TransactionType.mint:

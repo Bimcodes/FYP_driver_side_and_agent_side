@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/app_routes.dart';
 import '../core/theme/app_colors.dart';
 import '../models/user_model.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import 'widgets/app_notification.dart';
 
 class LoginWithEmailView extends ConsumerStatefulWidget {
   const LoginWithEmailView({super.key});
@@ -43,81 +45,76 @@ class _LoginWithEmailViewState extends ConsumerState<LoginWithEmailView> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
 
-    // React to successful login
     ref.listen<AuthState>(authViewModelProvider, (prev, next) {
       if (next.user != null && (prev?.user == null)) {
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setBool('has_logged_in_before', true);
+        });
+        
+        AppNotification.showSuccess(context, 'Welcome back! You are now logged in.');
         if (next.user!.role == UserRole.agent) {
           context.go(AppRoutes.agentDashboard);
+        } else if (next.user!.role == UserRole.student) {
+          context.go(AppRoutes.passengerDashboard);
         } else {
           context.go(AppRoutes.driverDashboard);
         }
       }
+
+      if (next.errorMessage != null && next.errorMessage != prev?.errorMessage) {
+        AppNotification.showError(context, next.errorMessage!);
+      }
     });
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.authBackground,
       appBar: AppBar(
-        title: const Text('Log In'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
+          onPressed: () => context.go(AppRoutes.roleSelect),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 const Text(
-                  'Welcome Back',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  'METRO PASS',
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.2),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Log in using your registered email and password.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 15,
-                  ),
+                  'Account Login',
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 48),
-
-                // Error Message Display
-                if (authState.errorMessage != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 24),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      authState.errorMessage!,
-                      style: const TextStyle(color: AppColors.error, fontSize: 13),
-                    ),
-                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Enter your email address and password to sign in to your Metro Pass account.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
+                ),
+                const SizedBox(height: 40),
 
                 // Email Field
+                const Text('Email Address', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailController,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: const TextStyle(color: Colors.white),
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: 'Email Address',
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textMuted),
+                    hintText: 'your.email@university.edu',
+                    hintStyle: const TextStyle(color: AppColors.textMuted),
+                    prefixIcon: const Icon(Icons.mail_outline, color: AppColors.textSecondary),
                     filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
+                    fillColor: AppColors.authSurface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                   validator: (val) {
                     if (val == null || val.isEmpty) return 'Email is required';
@@ -125,77 +122,81 @@ class _LoginWithEmailViewState extends ConsumerState<LoginWithEmailView> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-                // Password Field
+                // Password Field & Forgot Link
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Password', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                    GestureDetector(
+                      onTap: () => context.push(AppRoutes.forgotPassword),
+                      child: const Text('Forgot Password', style: TextStyle(color: AppColors.authPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _passwordController,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: const TextStyle(color: Colors.white),
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted),
+                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textSecondary),
                     suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: AppColors.textMuted,
-                      ),
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: AppColors.textMuted),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                     filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
+                    fillColor: AppColors.authSurface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                   validator: (val) {
                     if (val == null || val.isEmpty) return 'Password is required';
                     return null;
                   },
                 ),
-                const SizedBox(height: 8),
-
-                // Forgot Password Link
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => context.push(AppRoutes.forgotPassword),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.agentPrimary,
-                    ),
-                    child: const Text('Forgot Password?'),
-                  ),
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 48),
 
                 // Login Button
                 ElevatedButton(
                   onPressed: authState.isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.agentPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    backgroundColor: AppColors.authPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: authState.isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'Log In',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
+                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Log In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 8, height: 8,
+                        decoration: const BoxDecoration(color: AppColors.authPrimary, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Terminal MT-220 Online & Encrypted',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      context.go(AppRoutes.roleSelect);
+                    },
+                    child: const Text(
+                      'Not you? Switch role',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ),
                 ),
               ],
             ),

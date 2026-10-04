@@ -147,6 +147,21 @@ class WalletModel {
     };
   }
 
+  /// Returns a copy of this model with updated fields.
+  WalletModel copyWith({
+    String? id,
+    String? ownerId,
+    WalletType? walletType,
+    double? balance,
+  }) {
+    return WalletModel(
+      id: id ?? this.id,
+      ownerId: ownerId ?? this.ownerId,
+      walletType: walletType ?? this.walletType,
+      balance: balance ?? this.balance,
+    );
+  }
+
   /// Returns a copy of this model with an updated balance.
   ///
   /// Used by the ViewModel to compute the new state after a transfer

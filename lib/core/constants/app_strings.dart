@@ -18,8 +18,10 @@ class AppStrings {
   // ── Role Selection Screen ────────────────────────────────────────────────
   static const String roleSelectTitle = 'Who are you?';
   static const String roleSelectSubtitle = 'Select your role to continue to your workspace.';
+  static const String roleStudent = 'Student / Passenger';
   static const String roleAgent = 'Ticket Agent';
   static const String roleDriver = 'Transit Driver';
+  static const String roleStudentDesc = 'Check balance, receive tokens, board buses, and view transit maps.';
   static const String roleAgentDesc = 'Manage your Digital Vault and transfer tokens to students.';
   static const String roleDriverDesc = 'Monitor your live passenger manifest and broadcast your location.';
 
@@ -57,6 +59,32 @@ class AppStrings {
   static const String driverGpsInactive = 'GPS Inactive';
   static const String driverBoardingSuccess = 'Passenger Boarded!';
   static const String driverExpectedPayout = 'Expected Midnight Payout';
+
+  // ── Passenger Screens ────────────────────────────────────────────────────
+  static const String passengerDashboardTitle = 'Digital Transit Wallet';
+  static const String passengerBalanceLabel = 'Available Token Balance';
+  static const String passengerBoardButton = 'Board Bus';
+  static const String passengerReceiveButton = 'Receive Tokens';
+  static const String passengerMapButton = 'Campus Transit Map';
+  static const String passengerHistoryTitle = 'Ride & Top-Up History';
+  static const String passengerReceiveModalTitle = 'My Receiving QR Code';
+  static const String passengerReceiveModalSubtitle =
+      'Present this QR code to an authorized campus Agent to vend tokens directly into your digital wallet.';
+  static const String passengerCopyWalletId = 'Copy Wallet ID';
+  static const String passengerCopiedMessage = 'Wallet ID copied to clipboard!';
+  static const String passengerTopupReceived = 'Tokens Received!';
+  static const String passengerScanBusTitle = 'Scan Bus QR Code';
+  static const String passengerScanBusHint = 'Align the camera with the vehicle QR code mounted inside the bus';
+  static const String checkoutTitle = 'Boarding Checkout';
+  static const String checkoutDestinationLabel = 'Destination Stop';
+  static const String checkoutPassengersLabel = 'Number of Passengers';
+  static const String checkoutTotalFareLabel = 'Total Fare (Tokens)';
+  static const String checkoutConfirmWarning =
+      'This transaction is final and cannot be reversed. Tokens will be immediately deducted from your wallet.';
+  static const String checkoutPayAndBoard = 'Confirm & Pay Fare';
+  static const String checkoutInsufficientBalance =
+      'Insufficient balance. Please visit an authorized Agent to top up your wallet.';
+  static const String checkoutBoardingSuccess = 'Boarding Approved!';
 
   // ── General ──────────────────────────────────────────────────────────────
   static const String logout = 'Sign Out';

@@ -50,17 +50,35 @@ class WalletRepository {
   /// Returns the wallet of the appropriate type for that user.
   ///
   /// Throws if no wallet is found (data setup error — ensure seed SQL ran).
-  Future<WalletModel> getWalletByOwnerId(String ownerId) async {
+  Future<WalletModel> getWalletByOwnerId(String ownerId, {bool createIfMissing = false}) async {
     logger.d('[WalletRepository] getWalletByOwnerId() → ownerId: $ownerId');
     final data = await _client
         .from('wallets')
         .select()
         .eq('owner_id', ownerId)
-        .single();
+        .maybeSingle();
 
-    final wallet = WalletModel.fromJson(data);
-    logger.i('[WalletRepository] ✅ Wallet found — id: ${wallet.id} | type: ${wallet.walletType.name} | balance: ₦${wallet.balance}');
-    return wallet;
+    if (data != null) {
+      final wallet = WalletModel.fromJson(data);
+      logger.i('[WalletRepository] ✅ Wallet found — id: ${wallet.id} | type: ${wallet.walletType.name} | balance: ₦${wallet.balance}');
+      return wallet;
+    }
+
+    if (!createIfMissing) {
+      logger.e('[WalletRepository] No wallet found for $ownerId.');
+      throw Exception('No wallet found for this account. Please contact the administrator.');
+    }
+
+    logger.w('[WalletRepository] No wallet found for $ownerId. Attempting to create one...');
+    final newWalletData = await _client.from('wallets').insert({
+      'owner_id': ownerId,
+      'wallet_type': 'Student_Wallet',
+      'balance': 0.0,
+    }).select().single();
+    
+    final newWallet = WalletModel.fromJson(newWalletData);
+    logger.i('[WalletRepository] ✅ Lazy wallet created — id: ${newWallet.id}');
+    return newWallet;
   }
 
   /// Fetches a wallet by its own UUID.
@@ -87,50 +105,26 @@ class WalletRepository {
     return wallet;
   }
 
-  // ── Write ─────────────────────────────────────────────────────────────────
+  // ── Real-Time Stream ──────────────────────────────────────────────────────
 
-  /// Updates a wallet's balance by a DELTA (positive or negative amount).
+  /// Real-time stream watching a specific wallet's row in Supabase.
   ///
-  /// Important: [delta] is an adjustment, NOT a replacement value.
-  ///   - Deducting 100 tokens: delta = -100.0
-  ///   - Adding 100 tokens:    delta = +100.0
-  ///
-  /// The database uses a Supabase RPC function to ensure this is atomic
-  /// (preventing race conditions if two transfers happen simultaneously).
-  ///
-  /// Returns the updated [WalletModel] after the balance change.
-  Future<WalletModel> updateBalance({
-    required String walletId,
-    required double delta,
-  }) async {
-    logger.d('[WalletRepository] updateBalance() → walletId: $walletId | delta: ${delta >= 0 ? "+" : ""}$delta');
-
-    final current = await getWalletById(walletId);
-    if (current == null) {
-      logger.e('[WalletRepository] updateBalance() failed — wallet $walletId not found');
-      throw Exception('Wallet $walletId not found. Cannot update balance.');
-    }
-
-    final newBalance = current.balance + delta;
-
-    if (newBalance < 0) {
-      logger.w('[WalletRepository] updateBalance() blocked — would result in negative balance: $newBalance');
-      throw Exception(
-        'Insufficient balance. Current: ${current.balance}, Requested: ${delta.abs()}',
-      );
-    }
-
-    logger.d('[WalletRepository] Updating balance: ₦${current.balance} → ₦$newBalance');
-    final updated = await _client
+  /// Used by Passenger to receive instantaneous balance updates and trigger
+  /// the green flash animation when an Agent transfers tokens.
+  Stream<WalletModel> watchWallet(String walletId) {
+    logger.i('[WalletRepository] watchWallet() → opening Realtime stream for walletId: $walletId');
+    return _client
         .from('wallets')
-        .update({'balance': newBalance})
+        .stream(primaryKey: ['id'])
         .eq('id', walletId)
-        .select()
-        .single();
-
-    final updatedWallet = WalletModel.fromJson(updated);
-    logger.i('[WalletRepository] ✅ Balance updated — new balance: ₦${updatedWallet.balance}');
-    return updatedWallet;
+        .map((rows) {
+          if (rows.isEmpty) return null;
+          final wallet = WalletModel.fromJson(rows.first);
+          logger.d('[WalletRepository] 📡 Live wallet update — balance: ₦${wallet.balance}');
+          return wallet;
+        })
+        .where((w) => w != null)
+        .cast<WalletModel>();
   }
 }
 

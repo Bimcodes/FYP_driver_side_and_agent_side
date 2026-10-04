@@ -51,9 +51,34 @@ class AppRoutes {
   static const String agentHistory = '/agent/history';
 
   // ── Driver Routes ────────────────────────────────────────────────────────
+  /// Driver's bus selection screen (shown immediately after login).
+  static const String driverBusSelect = '/driver/bus-select';
+
   /// Driver's live passenger manifest screen with green-flash boarding events.
   static const String driverDashboard = '/driver/dashboard';
 
   /// Driver's daily shift ledger showing total fares collected.
   static const String driverLedger = '/driver/ledger';
+
+  // ── Passenger (Student) Routes ──────────────────────────────────────────
+  /// Student's sign up screen.
+  static const String passengerSignup = '/passenger/signup';
+
+  /// Student's email OTP verification screen.
+  static const String passengerOtp = '/passenger/verify-otp';
+
+  /// Student's onboarding screen (last name, phone, etc).
+  static const String passengerOnboarding = '/passenger/onboarding';
+
+  /// Student's main digital wallet dashboard with real-time balance stream.
+  static const String passengerDashboard = '/passenger/wallet';
+
+  /// Student's camera scanner to scan the vehicle QR and board.
+  static const String passengerBoard = '/passenger/board';
+
+  /// Student's campus transit map and stop fare chart.
+  static const String passengerMap = '/passenger/map';
+
+  /// Student's rides and top-up transaction ledger.
+  static const String passengerHistory = '/passenger/history';
 }

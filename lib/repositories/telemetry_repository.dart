@@ -68,6 +68,20 @@ class TelemetryRepository {
     await _client.from('telemetry').insert(telemetry.toInsertJson());
     logger.d('[TelemetryRepository] ✅ GPS coordinates inserted into telemetry table');
   }
+
+  Future<List<TelemetryModel>> getActiveBuses() async {
+    final fifteenMinutesAgo = DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String();
+    
+    final response = await _client
+        .from('telemetry')
+        .select()
+        .gte('timestamp', fifteenMinutesAgo)
+        .order('timestamp', ascending: false);
+
+    return (response as List)
+        .map((row) => TelemetryModel.fromJson(row))
+        .toList();
+  }
 }
 
 // ── Riverpod Provider ────────────────────────────────────────────────────────

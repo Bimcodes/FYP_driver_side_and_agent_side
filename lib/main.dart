@@ -46,6 +46,8 @@ import 'core/network/supabase_client.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
+import 'core/utils/inactivity_timer.dart';
+
 /// Application entry point.
 ///
 /// `async` because we need to await Supabase initialization before the
@@ -60,9 +62,7 @@ Future<void> main() async {
   runApp(
     // ProviderScope is the root of the Riverpod dependency injection tree.
     // All Providers defined in the app are accessible under this scope.
-    const ProviderScope(
-      child: QrFareApp(),
-    ),
+    const ProviderScope(child: InactivityTimerWrapper(child: QrFareApp())),
   );
 }
 

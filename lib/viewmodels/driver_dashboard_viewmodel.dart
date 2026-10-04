@@ -47,6 +47,7 @@ import '../models/wallet_model.dart';
 import '../repositories/telemetry_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../repositories/wallet_repository.dart';
+import 'bus_selection_viewmodel.dart';
 
 /// Complete state for the Driver's workspace.
 class DriverDashboardState {
@@ -146,7 +147,10 @@ class DriverDashboardViewModel extends Notifier<DriverDashboardState> {
 
   // ── Initialisation ─────────────────────────────────────────────────────────
 
-  /// Loads the Driver's wallet, starts the GPS timer, and subscribes to boarding events.
+  /// The time this driver's shift started (to filter fares to just this session).
+  DateTime? _shiftStartTime;
+
+  /// Loads the selected bus vault, starts the GPS timer, and subscribes to boarding events.
   ///
   /// Called by DriverDashboardView when it first mounts.
   /// Takes [driver] from the AuthViewModel's state (the logged-in user).
@@ -155,28 +159,43 @@ class DriverDashboardViewModel extends Notifier<DriverDashboardState> {
     state = state.copyWith(isLoading: true, clearLoadError: true);
 
     try {
+      final selectedBus = ref.read(selectedBusProvider);
+      if (selectedBus == null) {
+        throw Exception('No bus selected for this shift. Please select a bus first.');
+      }
+
       final walletRepo = ref.read(walletRepositoryProvider);
       final txRepo = ref.read(transactionRepositoryProvider);
 
-      logger.d('[DriverViewModel] Fetching Bus_Vault wallet...');
-      final wallet = await walletRepo.getWalletByOwnerId(driver.id);
+      logger.d('[DriverViewModel] Fetching Bus_Vault wallet ${selectedBus.vaultWalletId}...');
+      final wallet = await walletRepo.getWalletById(selectedBus.vaultWalletId);
+      if (wallet == null) {
+        throw Exception('Selected bus has no valid vault wallet.');
+      }
 
-      logger.d('[DriverViewModel] Fetching today\'s fares for wallet: ${wallet.id}');
-      final todaysFares = await txRepo.getTransactionsByReceiverWallet(wallet.id);
+      // Record the shift start time if not already set (e.g. from hot reload or navigating away and back)
+      _shiftStartTime ??= DateTime.now();
 
-      final totalTokens = todaysFares.fold<double>(0.0, (sum, tx) => sum + tx.amount);
+      logger.d('[DriverViewModel] Fetching shift fares for vault: ${wallet.id} since $_shiftStartTime');
+      final allRecentFares = await txRepo.getTransactionsByReceiverWallet(wallet.id);
+      
+      // Option A: Only show passengers that boarded during THIS driver's shift
+      final shiftFares = allRecentFares.where((tx) => tx.timestamp.isAfter(_shiftStartTime!)).toList();
 
-      logger.i('[DriverViewModel] ✅ Dashboard initialised — fares: ${todaysFares.length} | tokens: ₦$totalTokens');
+      final totalTokens = shiftFares.fold<double>(0.0, (sum, tx) => sum + tx.amount);
+
+      logger.i('[DriverViewModel] ✅ Dashboard initialised — shift fares: ${shiftFares.length} | tokens: ₦$totalTokens');
       state = state.copyWith(
         isLoading: false,
         wallet: wallet,
-        todaysFares: todaysFares,
-        passengerCount: todaysFares.length,
+        todaysFares: shiftFares,
+        passengerCount: shiftFares.length,
         tokensCollected: totalTokens,
       );
 
       logger.d('[DriverViewModel] Starting boarding event stream and GPS loop...');
       _startBoardingStream(wallet.id);
+      // We still broadcast the driver's ID for telemetry, not the bus ID.
       _startGpsLoop(driver.id);
 
     } catch (e, st) {

@@ -120,31 +120,41 @@ class RouterNotifier extends AutoDisposeAsyncNotifier<void> implements Listenabl
     // ── Define route categories ──────────────────────────────────────────────
 
     // Protected routes — require a valid Supabase session.
-    final bool isGoingToProtectedRoute =
-        destination.startsWith('/agent') || destination.startsWith('/driver');
+    final bool isGoingToProtectedRoute = (destination.startsWith('/agent') ||
+            destination.startsWith('/driver') ||
+            destination.startsWith('/passenger')) &&
+        !(destination == AppRoutes.passengerSignup ||
+            destination == AppRoutes.passengerOtp ||
+            destination == AppRoutes.passengerOnboarding);
 
     // Auth screens — should not be accessible once logged in.
     final bool isGoingToAuthScreen =
         destination == AppRoutes.roleSelect ||
         destination == AppRoutes.loginWithEmail ||
         destination == AppRoutes.forgotPassword ||
-        destination == AppRoutes.qrRegister;
+        destination == AppRoutes.qrRegister ||
+        destination == AppRoutes.passengerSignup ||
+        destination == AppRoutes.passengerOtp ||
+        destination == AppRoutes.passengerOnboarding;
 
     // ── Apply rules ──────────────────────────────────────────────────────────
 
     // Rule 1: Not logged in + trying to reach a protected route
-    //         → send back to role selection.
+    //         → send back to login.
     if (user == null && isGoingToProtectedRoute) {
-      return AppRoutes.roleSelect;
+      return AppRoutes.loginWithEmail;
     }
 
     // Rule 2: Already logged in + trying to reach an auth screen
     //         → send to the correct dashboard for their role.
-    //         (Prevents logged-in drivers from seeing the login screen.)
     if (user != null && isGoingToAuthScreen) {
-      return user.role == UserRole.agent
-          ? AppRoutes.agentDashboard
-          : AppRoutes.driverDashboard;
+      if (user.role == UserRole.agent) {
+        return AppRoutes.agentDashboard;
+      } else if (user.role == UserRole.student) {
+        return AppRoutes.passengerDashboard;
+      } else {
+        return AppRoutes.driverBusSelect;
+      }
     }
 
     // Rule 3: All other navigations — allow through unchanged.

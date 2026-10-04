@@ -33,6 +33,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/utils/app_error_handler.dart';
 import '../core/utils/app_logger.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
@@ -135,15 +136,65 @@ class AuthViewModel extends Notifier<AuthState> {
 
     } catch (e, st) {
       logger.e('[AuthViewModel] signIn failed', error: e, stackTrace: st);
-      String errorMessage = e.toString();
-      if (errorMessage.startsWith('Exception: ')) {
-        errorMessage = errorMessage.replaceFirst('Exception: ', '');
-      }
+      final errorMessage = AppErrorHandler.toUserMessage(e);
       state = state.copyWith(
         isLoading: false,
         errorMessage: errorMessage,
         clearUser: true,
       );
+    }
+  }
+
+  Future<void> setTransactionPin(String pin) async {
+    final user = state.user;
+    if (user == null) return;
+
+    logger.i('[AuthViewModel] setTransactionPin()');
+    try {
+      final authRepo = ref.read(authRepositoryProvider);
+      await authRepo.setTransactionPin(pin);
+      logger.i('[AuthViewModel] ✅ Transaction PIN updated');
+    } catch (e, st) {
+      logger.e('[AuthViewModel] Failed to update PIN', error: e, stackTrace: st);
+      rethrow;
+    }
+  }
+
+  Future<bool> hasTransactionPin() async {
+    try {
+      return await ref.read(authRepositoryProvider).hasTransactionPin();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Updates the logged-in user's profile details.
+  Future<void> updateUserProfile({
+    required String firstName,
+    String? lastName,
+    String? phone,
+    String? department,
+    String? username,
+  }) async {
+    final user = state.user;
+    if (user == null) return;
+
+    logger.i('[AuthViewModel] updateUserProfile()');
+    try {
+      final authRepo = ref.read(authRepositoryProvider);
+      final updatedUser = await authRepo.updateUserProfile(
+        userId: user.id,
+        firstName: firstName,
+        lastName: lastName,
+        phone: phone,
+        department: department,
+        username: username,
+      );
+      state = state.copyWith(user: updatedUser);
+      logger.i('[AuthViewModel] ✅ Profile updated in state');
+    } catch (e, st) {
+      logger.e('[AuthViewModel] Failed to update profile', error: e, stackTrace: st);
+      rethrow;
     }
   }
 

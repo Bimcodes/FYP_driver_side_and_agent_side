@@ -100,10 +100,22 @@ class UserModel {
   /// The display name of the user (e.g., "Campus Gate Agent (John)").
   final String name;
 
+  // New optional fields for Student Sign-Up & Onboarding
+  final String? firstName;
+  final String? lastName;
+  final String? username;
+  final String? phone;
+  final String? department;
+
   const UserModel({
     required this.id,
     required this.role,
     required this.name,
+    this.firstName,
+    this.lastName,
+    this.username,
+    this.phone,
+    this.department,
   });
 
   // ── JSON Serialisation ────────────────────────────────────────────────────
@@ -112,20 +124,16 @@ class UserModel {
   ///
   /// Supabase returns database rows as `Map<String, dynamic>`.
   /// This factory parses that map into a typed Dart object.
-  ///
-  /// Example input:
-  /// ```dart
-  /// {
-  ///   'id': '22222222-2222-2222-2222-222222222222',
-  ///   'role': 'Agent',
-  ///   'name': 'Campus Gate Agent (John)',
-  /// }
-  /// ```
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,
       role: UserRole.fromString(json['role'] as String),
       name: json['name'] as String,
+      firstName: json['first_name'] as String?,
+      lastName: json['last_name'] as String?,
+      username: json['username'] as String?,
+      phone: json['phone'] as String?,
+      department: json['department'] as String?,
     );
   }
 
@@ -135,9 +143,18 @@ class UserModel {
       'id': id,
       'role': role.toDbString(),
       'name': name,
+      if (firstName != null) 'first_name': firstName,
+      if (lastName != null) 'last_name': lastName,
+      if (username != null) 'username': username,
+      if (phone != null) 'phone': phone,
+      if (department != null) 'department': department,
     };
   }
 
+  /// Helper getter for displaying the user's preferred display name on the home screen.
+  /// Uses `username` if available, otherwise `firstName`, otherwise falls back to `name`.
+  String get displayName => username ?? firstName ?? name;
+
   @override
-  String toString() => 'UserModel(id: $id, role: $role, name: $name)';
+  String toString() => 'UserModel(id: $id, role: $role, name: $name, username: $username)';
 }

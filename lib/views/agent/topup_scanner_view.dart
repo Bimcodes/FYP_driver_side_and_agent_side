@@ -52,7 +52,10 @@ class _TopupScannerViewState extends State<TopupScannerView> {
       logger.i('Launching Paystack URL: $url');
       _scannerController.stop();
 
-      final uri = Uri.parse(url);
+      final uri = Uri.tryParse(url);
+      if (uri == null || uri.scheme != 'https' || uri.host != 'checkout.paystack.com') {
+        throw Exception('This QR code is not a valid Paystack top-up link.');
+      }
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
         

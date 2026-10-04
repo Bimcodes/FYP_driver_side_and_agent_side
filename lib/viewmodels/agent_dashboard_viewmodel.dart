@@ -140,7 +140,7 @@ class AgentDashboardViewModel extends Notifier<AgentDashboardState> {
       final wallet = await walletRepo.getWalletByOwnerId(agent.id);
 
       logger.d('[AgentViewModel] Fetching transaction history for wallet: ${wallet.id}');
-      final transactions = await txRepo.getTransactionsBySenderWallet(wallet.id);
+      final transactions = await txRepo.getAgentTransactions(wallet.id);
 
       logger.i('[AgentViewModel] ✅ Dashboard loaded — balance: ₦${wallet.balance} | txCount: ${transactions.length}');
       state = state.copyWith(
@@ -173,10 +173,11 @@ class AgentDashboardViewModel extends Notifier<AgentDashboardState> {
   ///
   /// [studentWalletId]: The UUID of the target student wallet.
   /// [amount]: Number of tokens to transfer (must be > 0).
-  Future<void> transferToStudent({
+  Future<bool> transferToStudent({
     required String agentWalletId,
     required String studentWalletId,
     required double amount,
+    required String pin,
   }) async {
     logger.i('[AgentViewModel] transferToStudent() → amount: ₦$amount | student: $studentWalletId');
     state = state.copyWith(
@@ -188,54 +189,38 @@ class AgentDashboardViewModel extends Notifier<AgentDashboardState> {
     try {
       if (amount <= 0) throw Exception('Transfer amount must be greater than zero.');
 
-      final currentBalance = state.wallet?.balance ?? 0;
-      if (amount > currentBalance) {
-        throw Exception(
-          'Insufficient balance. You have ₦${currentBalance.toStringAsFixed(2)} '
-          'but tried to transfer ₦${amount.toStringAsFixed(2)}.',
-        );
-      }
-
-      final walletRepo = ref.read(walletRepositoryProvider);
       final txRepo = ref.read(transactionRepositoryProvider);
-
-      logger.d('[AgentViewModel] Step 1: Verifying student wallet exists...');
-      final studentWallet = await walletRepo.getWalletById(studentWalletId);
-      if (studentWallet == null) throw Exception('Student wallet ID not found.');
-
-      logger.d('[AgentViewModel] Step 2: Deducting ₦$amount from agent wallet...');
-      final updatedAgentWallet = await walletRepo.updateBalance(
-        walletId: agentWalletId,
-        delta: -amount,
+      
+      await txRepo.retailTransfer(
+        studentWalletId: studentWalletId, 
+        amount: amount, 
+        pin: pin,
       );
 
-      logger.d('[AgentViewModel] Step 3: Crediting ₦$amount to student wallet...');
-      await walletRepo.updateBalance(
-        walletId: studentWalletId,
-        delta: amount,
-      );
+      // Fetch the updated agent wallet
+      final updatedAgentWallet = await ref.read(walletRepositoryProvider).getWalletById(agentWalletId);
+      final txList = await txRepo.getAgentTransactions(agentWalletId);
 
-      logger.d('[AgentViewModel] Step 4: Logging transaction audit record...');
-      final newTransaction = await txRepo.createTransaction(
-        type: TransactionType.fare,
-        senderWalletId: agentWalletId,
-        receiverWalletId: studentWalletId,
-        amount: amount,
-      );
-
-      logger.i('[AgentViewModel] ✅ Transfer complete — new agent balance: ₦${updatedAgentWallet.balance}');
+      logger.i('[AgentViewModel] ✅ Transfer complete — new agent balance: ₦${updatedAgentWallet?.balance}');
       state = state.copyWith(
         isTransferring: false,
         wallet: updatedAgentWallet,
-        recentTransactions: [newTransaction, ...state.recentTransactions],
+        recentTransactions: txList,
         transferSuccess: '₦${amount.toStringAsFixed(2)} transferred successfully!',
       );
+      return true;
 
     } catch (e, st) {
       logger.e('[AgentViewModel] transferToStudent failed', error: e, stackTrace: st);
-      String message = e.toString();
-      if (message.startsWith('Exception: ')) message = message.replaceFirst('Exception: ', '');
-      state = state.copyWith(isTransferring: false, transferError: message);
+      final errorMsg = e.toString().contains('message: "') 
+          ? RegExp(r'message: "(.*?)"').firstMatch(e.toString())?.group(1) ?? 'Transaction failed'
+          : e.toString();
+          
+      state = state.copyWith(
+        isTransferring: false, 
+        transferError: errorMsg.replaceAll('PostgrestException(message: ', '').replaceAll(')', ''),
+      );
+      return false;
     }
   }
 
